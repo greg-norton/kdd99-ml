@@ -8,6 +8,8 @@ from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import classification_report, confusion_matrix
 
 def get_remote_dataset(URL,header=None):
     try:
@@ -193,13 +195,17 @@ def build_classifier(x, y, hidden_layers=[8], activation='relu', epochs=5, batch
 
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         return model
-    return KerasClassifier(build_fn=baseline_model, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    estimator = KerasClassifier(build_fn=baseline_model, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    return estimator
 
-if __name__ == '__main__':
+def run_tf():
     ###acquire and process dataset
-    df = get_local_dataset('./nslkdd/KDDTrain+.txt')
+    df = get_local_dataset('./nslkdd/KDDTest+.txt')
+    #df_train = get_local_dataset('./nslkdd/KDDTrain+.txt')
     df = set_KDD_columns(df)
     df = reencode_dataset(df)
+    set_multi_class(df)
+    df.dropna(inplace=True, axis=1)
     x, y = generate_training_set(df,df['outcome'].nunique())
 
     ###build MLP model
@@ -216,3 +222,23 @@ if __name__ == '__main__':
     print(y_eval)
     score = metrics.accuracy_score(y_eval, pred)
     print("Validation score: {}".format(score))
+
+def run_sklearn():
+    df = get_local_dataset('./nslkdd/KDDTrain+.txt')
+    df = set_KDD_columns(df)
+    df = reencode_dataset(df)
+    df.dropna(inplace=True, axis=1)
+    x, y = generate_training_set(df,df['outcome'].nunique())
+
+    x_train, x_test, y_train, y_test = train_test_split(x,y,test_size=0.25, random_state=42)
+
+    mlp = MLPClassifier(hidden_layer_sizes=(64,64,),max_iter=50,verbose=True)
+    mlp.fit(x_train, y_train)
+
+    predictions = mlp.predict(x_test)
+    #print(confusion_matrix(y_test, predictions))
+    print(classification_report(y_test,predictions))
+
+if __name__ == '__main__':
+    #run_sklearn()
+    run_tf()
