@@ -75,7 +75,7 @@ def set_KDD_columns(kdd_df):
         'outcome',
         'difficulty_rating'
     ]
-    return kdd_df
+    #return kdd_df
 
 def set_bin_class(df):
     for i, row in df.iterrows():
@@ -166,12 +166,12 @@ def reencode_dataset(df):
     encode_zscore(df, 'dst_host_rerror_rate')
     encode_zscore(df, 'dst_host_srv_rerror_rate')
 
-    return df
+    #return df
 
-def generate_training_set(df, num_outcomes):
+def generate_training_set(df, num_outcomes,frac=0.1):
     '''This doesn't work well right now. FIX ME!!!'''
     while True:
-        df_train = df.sample(frac=0.1, replace=False)
+        df_train = df.sample(frac=frac, replace=False)
         dummies = pd.get_dummies(df_train['outcome'])
         if len(dummies.columns) != num_outcomes:
             continue
@@ -202,14 +202,14 @@ def run_tf():
     ###acquire and process dataset
     df = get_local_dataset('./nslkdd/KDDTest+.txt')
     #df_train = get_local_dataset('./nslkdd/KDDTrain+.txt')
-    df = set_KDD_columns(df)
-    df = reencode_dataset(df)
-    set_multi_class(df)
+    set_KDD_columns(df)
+    reencode_dataset(df)
+    #set_bin_class(df)
     df.dropna(inplace=True, axis=1)
-    x, y = generate_training_set(df,df['outcome'].nunique())
+    x, y = generate_training_set(df,df['outcome'].nunique(),frac=1.0)
 
     ###build MLP model
-    estimator = build_classifier(x, y, hidden_layers=[32,32])
+    estimator = build_classifier(x, y, hidden_layers=[64,64])
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
 
     ###train model
@@ -219,6 +219,47 @@ def run_tf():
     ###evaluate model
     pred = estimator.predict(x_test)
     y_eval = np.argmax(y_test, axis=1)
+    print(y_eval)
+    score = metrics.accuracy_score(y_eval, pred)
+    print("Validation score: {}".format(score))
+
+def run_tf_full():
+    df_test = get_local_dataset('./nslkdd/KDDTest+.txt')
+    set_KDD_columns(df_test)
+    reencode_dataset(df_test)
+    set_bin_class(df_test)
+    for col in ('service-aol','service-harvest','service-http_2784','service-http_8001','service-red_i','service-urh_i'):
+        df_test[col] = 0    
+    df_test.fillna(value=0, inplace=True, axis=1)
+
+    x_final, y_final = generate_training_set(df_test, df_test['outcome'].nunique(), frac=1.0)
+    
+    df_train = get_local_dataset('./nslkdd/KDDTrain+.txt')
+    set_KDD_columns(df_train)
+    reencode_dataset(df_train)
+    set_bin_class(df_train)
+    df_train.fillna(value=0, inplace=True, axis=1)
+
+    df_test = df_test[df_train.columns]
+    print(df_test.columns)
+    print(df_train.columns)
+    
+    x, y = generate_training_set(df_train, df_train['outcome'].nunique(), frac=0.1)
+
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
+
+
+    for col in df_train.columns:
+        if col not in df_test.columns:
+            print(col)
+
+    estimator = build_classifier(x_train, y_train, hidden_layers=[16,16])
+    monitor = EarlyStopping(monitor='val_loss', min_delta=1e-3, patience=5, verbose=1, mode='auto')
+    estimator.fit(x_train,y_train,validation_data=(x_test,y_test),callbacks=[monitor],verbose=1,epochs=100)
+
+    ###evaluate model
+    pred = estimator.predict(x_final)
+    y_eval = np.argmax(y_final, axis=1)
     print(y_eval)
     score = metrics.accuracy_score(y_eval, pred)
     print("Validation score: {}".format(score))
@@ -241,4 +282,5 @@ def run_sklearn():
 
 if __name__ == '__main__':
     #run_sklearn()
-    run_tf()
+    #run_tf()
+    run_tf_full()
