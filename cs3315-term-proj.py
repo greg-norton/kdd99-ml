@@ -6,7 +6,7 @@ from tensorflow.keras.utils import get_file
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping, LearningRateScheduler
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import classification_report, confusion_matrix
@@ -186,16 +186,16 @@ def generate_training_set(df, num_outcomes,frac=0.1):
 
     return x, y
 
-def build_classifier(x, y, hidden_layers=[8], activation='relu', epochs=5, batch_size=50, verbose=1):
+def build_classifier(x, y, hidden_layers=[8], activation='relu', batch_size=None, verbose=1):
     def baseline_model():
         model = Sequential()
         for layer in hidden_layers:
-            model.add(Dense(layer, input_dim=x.shape[1], activation=activation))
+            model.add(Dense(layer, activation=activation))
         model.add(Dense(y.shape[1], activation='softmax'))
 
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         return model
-    estimator = KerasClassifier(build_fn=baseline_model, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    estimator = KerasClassifier(build_fn=baseline_model, batch_size=batch_size, verbose=verbose)
     return estimator
 
 def run_tf():
@@ -240,21 +240,23 @@ def run_tf_full():
     set_bin_class(df_train)
     df_train.fillna(value=0, inplace=True, axis=1)
 
-    df_test = df_test[df_train.columns]
-    print(df_test.columns)
-    print(df_train.columns)
+    df_test = df_test[df_train.columns] #fixes column ordering (does that matter? probably)
+    #print(df_test.columns)
+    #print(df_train.columns)
     
     x, y = generate_training_set(df_train, df_train['outcome'].nunique(), frac=0.1)
 
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25)
 
 
-    for col in df_train.columns:
-        if col not in df_test.columns:
-            print(col)
+    #for col in df_train.columns:
+    #    if col not in df_test.columns:
+    #        print(col)
 
-    estimator = build_classifier(x_train, y_train, hidden_layers=[16,16])
-    monitor = EarlyStopping(monitor='val_loss', min_delta=1e-3, patience=5, verbose=1, mode='auto')
+    estimator = build_classifier(x_train, y_train, hidden_layers=[128,128,128,128,128,128,128,128,128,128])
+
+    monitor = EarlyStopping(monitor='val_loss', min_delta=1e-4, patience=5, verbose=1, mode='auto')
+    
     estimator.fit(x_train,y_train,validation_data=(x_test,y_test),callbacks=[monitor],verbose=1,epochs=100)
 
     ###evaluate model
